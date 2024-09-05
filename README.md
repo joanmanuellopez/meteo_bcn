@@ -1,2 +1,4 @@
-# meteo_bcn
-Introducción al análisis de series temporales en lenguaje R
+# Evolución temporal de la temperatura media y la precipitación en la ciudad de Barcelona desde el año 1800 hasta la actualidad
+Introducción al análisis de series temporales en lenguaje R mediante el análisis de las observaciones mensuales de temperatura media y precipitación acumulada registradas en la ciudad de Barcelona desde el año 1800. 
+
+El objetivo de este proyecto es visualizar la evolución temporal de los parámetros meteorológicos medidos y descomponer las series temporales correspondientes para obtener sus componentes de periodicidad, tendencia y aleatoriedad. Se quiere verificar a partir de representaciones gráficas si hoy en día se está produciendo un aumento de las temperaturas medias, así como si los periodos de sequía o lluvias más escasas son más frecuentes respecto a años anteriores.
