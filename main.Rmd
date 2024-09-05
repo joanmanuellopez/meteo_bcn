@@ -1,0 +1,386 @@
+---
+title: "Evolución temporal de la temperatura media y la precipitación en la ciudad de Barcelona desde el año 1800 hasta la actualidad"
+#author: "Joan Manuel Lopez Ruiz"
+#date: "2024-04-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libraries, include=FALSE}
+library(knitr)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+library(ggfortify)
+```
+
+## 1. Introducción
+En este proyecto se va a analizar la evolución temporal de la temperatura y la precipitación en la ciudad de Barcelona a partir de las mediciones registradas desde los años 1780 (temperatura) y 1786 (lluvia) y hasta la actualidad, con el último registro del mes de diciembre de 2023. Los datasets publicados contienen la temperatura media (ºC) y la precipitación acumulada (mm) para cada mes desde el inicio de la serie.
+
+De entrada se va a visualizar la evolución temporal de los parámetros meteorológicos medidos y se van a descomponer las series temporales correspondientes para obtener sus componentes de periodicidad, tendencia y aleatoriedad. Se quiere verificar a partir de representaciones gráficas si hoy en día se está produciendo un aumento de las temperaturas medias, así como si los periodos de sequía o lluvias más escasas son más frecuentes respecto a años anteriores.
+
+### 1.1 Breve introducción a las series temporales
+
+A grandes rasgos se puede definir una serie temporal de datos como una secuencia de observaciones capturadas a intervalos regulares de tiempo; por ejemplo cada segundo, cada minuto, cada mes, cada cinco años, etc. Conviene mencionar que es posible encontrar series temporales a intervalos irregulares de tiempo, aunque en este caso su análisis es más complejo.
+
+Para analizar correctamente una serie temporal es necesario observar por separado las cuatro componentes que la forman:
+
+* **Tendencia.** Evolución en el largo plazo de la serie temporal.
+* **Estacionalidad.** Comportamiento repetido de manera periódica en cada ciclo.
+* **Ciclicidad.** Variaciones observadas en periodos mayores que un ciclo, debidas a altibajos que se van repitiendo de vez en cuando.
+* **Irregularidades.** Variaciones impredecibles y erráticas, aleatorias o no, tales como ruido o errores.
+
+Finalmente hay que tener en cuenta los dos tipos de series temporales que se pueden encontrar según se combinen sus componentes:
+
+* **Serie temporal aditiva,** obtenida a partir de la suma de sus componentes de tendencia, estacionalidad e irregularidades.
+* **Serie temporal multiplicativa,** obtenida a partir del producto de sus componentes de tendencia, estacionalidad e irregularidades.
+
+### 1.2 Fuente de los datos
+
+Los datasets que se han utilizado en este proyecto se han obtenido de la web del [*Servei Meteorològic de Catalunya (meteocat)*](https://es.meteocat.gencat.cat/) y se pueden encontrar en este [enlace](https://www.meteo.cat/wpweb/climatologia/dades-i-productes-climatics/serie-climatica-de-barcelona-des-de-1780/). Son dos ficheros de texto plano (.txt) uno con las temperaturas medias mensuales (ºC) y otro con la cantidad de precipitación acumulada cada mes (mm).  
+
+Según se informa en la web del *meteocat* los datos que se facilitan se han obtenido siguiendo la metodología de control de calidad y homogeneidad de series climáticas indicada en las referencias adjuntas:
+
+*Serie de temperatura del aire de Barcelona (desde 1780)*  
+
+* Prohom M, Barriendos, Aguilar E, Ripoll R (2012): [Recuperación y análisis de la serie de temperatura diaria de Barcelona, 1780-2011](https://static-m.meteo.cat/wordpressweb/wp-content/uploads/2014/11/20105602/Ref_publicacio_aec.pdf). Cambio Climático. Extremos e Impactos, Asociación Española de Climatología, Serie A, Vol. 8, 207–217.  
+
+*Serie de precipitación de Barcelona (desde 1786)*  
+
+* Prohom M, Barriendos M, Sanchez-Lorenzo A (2015): [Reconstruction and homogenization of the longest instrumental precipitation series in the Iberian Peninsula (Barcelona, 1786-2014)](https://static-m.meteo.cat/wordpressweb/wp-content/uploads/2015/11/11084210/Prohom-et-al-2015-PPT-BCN.pdf). International Journal of Climatology, DOI: 10.1002/joc.4537.
+
+## 2. Obtención de los datos y adecuación. Análisis exploratorio  
+
+Los ficheros de texto originales incluyen la información descriptiva de los datos en las siete primeras líneas, por lo que se deberán excluir a la hora de leer el fichero. Como se ha comentado en el apartado anterior se dispone de dos ficheros de texto plano, con la separación de campos por tabuladores, y separación de decimales con el punto (.).  
+
+Los datos se presentan en formato *wide* con trece columnas y una fila de datos por año. La primera columna de nombre 'ANY' contiene los años, y las doce siguientes (una por cada mes, ordenadas cronológicamente) nombradas con la primera letra de cada mes en catalán, con las observaciones correspondientes.
+
+A la hora de leer los ficheros se decide renombrar las columnas, de manera que se evitan repeticiones en los nombres de los campos que pudieran causar posibles conflictos en la importación. Se asigna a las columnas correspondientes a los meses un código alfanumérico que, además, facilite el tratamiento posterior de estos datos como valor de fecha.
+
+```{r message=FALSE, warning=FALSE}
+
+# Definicion de los nombres de las columnas
+cols <- c("ANYO",
+          "M01","M02","M03","M04","M05","M06",
+          "M07","M08","M09","M10","M11","M12")
+
+# Lectura de los ficheros txt con los datos (decimales con '.' y desde línea 9)
+temp_df <- read.delim("raw_data/Barcelona_TM_m_1780_2023.txt", 
+                      col.names=cols, header=TRUE, skip=8)
+
+rain_df <- read.delim("raw_data/Barcelona_PPT_m_1786_2023.txt", 
+                      col.names=cols, header=TRUE, skip=8)
+
+# Verificacion de los datos importados
+summary(temp_df)
+
+summary(rain_df)
+
+```
+
+La verificación de los datos importados mediante la función *summary()* muestra que los valores leídos son coherentes según lo que se espera a priori en base al conocimiento previo. Se observa que los valores de temperatura media mensual son más bajos en los meses de invierno y más altos en los de verano, y que las temperaturas medias máxima y mínima entran dentro de lo esperado. Lo mismo se observa para los valores de precipitación mensual, con unos valores medios más altos en los meses de otoño y más bajos en invierno y verano, un comportamiento típico en la ciudad de Barcelona.
+
+No hay valores nulos (NA) aunque se observa la presencia de valores centinela (-999.90) en los meses de enero (M01) a junio (M06) que serán sustituidos por el valor nulo. Se ha observado que estos valores centinela solo se dan para el primer año de la serie de precipitación, ya que el primer registro observado es del mes de julio de 1786.
+
+```{r message=FALSE, warning=FALSE}
+
+# Sustitucion del centinela por NA en el dataframe rain_df
+rain_df[rain_df == -999.9] <- NA
+
+```
+
+### 2.1 Adecuación de los datos al análisis
+Se ha decidido, de manera arbitraria, analizar los datos de temperatura y precipitación disponibles a partir del año 1800, de manera que se descartarán las observaciones anteriores. Para poder hacer el análisis de la serie temporal se debe convertir el formato del dataset de *wide* a *long*, de manera que cada fila contenga una única observación correspondiente a una fecha (mes-año) concreta. Finalmente se unen los dos dataframes en uno único que contenga en cada fila la observación de temperatura media (ºC) y la precipitación acumulada (mm).
+
+```{r message=FALSE, warning=FALSE}
+
+temp_df <- temp_df[temp_df$ANYO >= 1800,]
+rain_df <- rain_df[rain_df$ANYO >= 1800,]
+
+temp_long_df <- temp_df %>% pivot_longer(M01:M12,names_to = "MES", values_to = "TEMP_MEDIA_C")
+temp_long_df$MES <- substr(temp_long_df$MES,2,3)
+
+rain_long_df <- rain_df %>% pivot_longer(M01:M12,names_to = "MES", values_to = "PREC_MM")
+rain_long_df$MES <- substr(rain_long_df$MES,2,3)
+
+# Join de los dos dataframes resultantes por año y mes
+meteo_bcn_df <- temp_long_df %>% left_join(rain_long_df, by=c("ANYO","MES"))
+
+```
+
+Finalmente se crea una columna de tipo *Date* que incluya mes y año con la funcion *ym()* de la librería *lubridate*, para facilitar el tratamiento de las fechas, y se reordenan las columnas para facilitar la lectura por parte de un ojo humano.
+
+```{r message=FALSE, warning=FALSE}
+
+# Creacion de un parametro de tipo Date para facilitar el tratamiento de las fechas
+meteo_bcn_df$FECHA <- ym(paste(meteo_bcn_df$ANYO,meteo_bcn_df$MES,sep="-"))
+
+meteo_bcn_df <- meteo_bcn_df[,c(5,1:4)]
+
+summary(meteo_bcn_df)
+
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# Una vez revisados los valores del dataframe con la funcion summary, guardo un CSV master 
+# con los datos conjuntos de temperatura media mensual y precipitacion acumulada en el
+# periodo entre 1800 y 2023
+
+write.csv(meteo_bcn_df[,c(1,4,5)], file = "clean_data/meteo_bcn_1800-2023.csv",
+          sep = ',', row.names = FALSE)
+
+```
+
+### 2.3 Análisis exploratorio
+
+En este apartado se va a llevar a cabo un análisis exploratorio de los datos a partir de la visualización de las distribuciones mediante el histograma y el boxplot. En primer lugar cabe destacar que no se observan valores atípicos en ninguno de los datasets, si bien es cierto que en el diagrama boxplot de precipitación acumulada mensual se observan valores máximos 4 veces mayores al tercer cuartil, se consideran coherentes con las características del clima mediterráneo de la ciudad de Barcelona, en general de lluvias escasas exceptuando algunos meses, especialmente en otoño, en que las precipitaciones son más abundantes. Queda fuera del alcance de este proyecto el análisis de los meses más lluviosos.  
+
+En cuanto a las distribuciones, en los histogramas se observa una distribución bimodal para las temperaturas medias y una distribución asimétrica positiva para la precipitación acumulada. La distribución de las precipitaciones mensuales es la esperada a priori, teniendo en cuenta las características del clima mediterráneo comentadas en el párrafo anterior. En cambio la distribución de las temperaturas medias resulta, de entrada, sorprendente ya que se esperaba una distribución normal teniendo en cuenta que los meses con temperaturas intermedias, en primavera y otoño, son más numerosos. Queda fuera del alcance de este proyecto el análisis de las distribuciones para periodos de tiempo menores, que permitieran aclarar el motivo de esta distribución.
+
+```{r message=FALSE, warning=FALSE}
+
+# Histograma y boxplot de las temperaturas medias mensuales
+ggplot(meteo_bcn_df, aes(x=TEMP_MEDIA_C)) + 
+  geom_histogram(binwidth=0.5, fill="#990000", color="#6b2e2e", alpha=0.7, linewidth=0.2) +
+  labs(title = "Distribución de las temperaturas medias mensuales",
+       subtitle = "Barcelona. Periodo 1800-2023") +
+  xlab("Temperatura media (ºC)") + ylab(NULL) +
+  scale_x_continuous(breaks = seq(0,30,5)) +
+  theme(legend.position = "none", panel.background = element_blank(), panel.border = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(color = "#404040", hjust = 0.5),
+        axis.line.x = element_line(colour = "black", linewidth = 0.5, linetype = "solid"),
+        axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+ggplot(meteo_bcn_df, aes(y=TEMP_MEDIA_C)) + 
+  geom_boxplot(fill="#990000", color="#6b2e2e", alpha=0.7, linewidth=0.5) +
+  labs(title = "Boxplot de las temperaturas medias mensuales (ºC)",
+       subtitle = "Barcelona. Periodo 1800-2023") +
+  xlab(NULL) + ylab(NULL) +
+  scale_y_continuous(breaks = seq(0,30,5)) +
+  theme(legend.position = "none", panel.background = element_blank(), panel.border = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(color = "#404040", hjust = 0.5),
+        axis.line.y = element_line(colour = "black", linewidth = 0.2, linetype = "solid"),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+# Histograma y boxplot de las precipitaciones acumuladas mensuales
+ggplot(meteo_bcn_df, aes(x = PREC_MM)) + 
+  geom_histogram(binwidth = 10, fill="#336699", color="#476685", alpha=0.7, linewidth=0.2) +
+  labs(title = "Distribución de las precipitaciones acumuladas mensuales",
+       subtitle = "Barcelona. Periodo 1800-2023") +
+  xlab("Precipitación acumulada (mm)") + ylab(NULL) +
+  scale_x_continuous(breaks = seq(0,400,50)) +
+  theme(legend.position = "none", panel.background = element_blank(), panel.border = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(color = "#404040", hjust = 0.5),
+        axis.line.x = element_line(colour = "black", linewidth = 0.5, linetype = "solid"),
+        axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+ggplot(meteo_bcn_df, aes(y=PREC_MM)) + 
+  geom_boxplot(fill="#336699", color="#476685", alpha=0.7, linewidth=0.5) +
+  labs(title = "Boxplot de las precipitaciones acumuladas mensuales (mm)",
+       subtitle = "Barcelona. Periodo 1800-2023") +
+  xlab(NULL) + ylab(NULL) +
+  scale_y_continuous(breaks = seq(0,500,100)) +
+  theme(legend.position = "none", panel.background = element_blank(), panel.border = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(color = "#404040", hjust = 0.5),
+        axis.line.y = element_line(colour = "black", linewidth = 0.2, linetype = "solid"),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+
+```
+
+
+## 3. Análisis de las series temporales en el periodo 1800-2023  
+
+El primer paso del análisis de las series temporales es la visualización de la evolución temporal, mes a mes, de las temperaturas medias y la precipitación acumulada, y se va a aprovechar para hacer énfasis en la importancia de la granularidad y de tomar una precisión temporal adecuada para poder hacer observaciones correctas.
+
+El siguiente paso es la observación de la evolución de las series temporales considerando periodos de tiempo más grandes, de manera que se facilite la detección de patrones a simple vista. En este análisis se agruparán los datos en periodos de cinco años y se considerarán las temperaturas medias anuales y la precipitación media anual en cada uno de estos periodos.
+
+El paso final del análisis es la descomposición de las series temporales para observar sus componentes de tendencia, estacionalidad e irregularidades descritas en el *apartado 1.1*. En este caso se va a tomar únicamente los últimos 10 años de observaciones, es decir, el periodo entre los años 2014 y 2023.
+
+### 3.1 Representación gráfica de las series temporales
+
+En las gráficas se representa la evolución temporal, mes a mes, de la temperatura media y la precipitación acumulada desde enero de 1800 hasta diciembre de 2023. La gran cantidad de observaciones representadas (2688 meses) dificulta la observación de patrones a simple vista, aunque sí que se intuye la tendencia ascendente de las temperaturas medias mensuales así como picos puntuales en la precipitación acumulada típicos del clima mediterráneo.
+
+Como se puede ver el nivel de detalle de los gráficos es excesivo, por lo que resulta conveniente cambiar la precisión de la representación y escalarla a periodos de tiempos mayores para facilitar la observación de tendencias y patrones a simple vista.
+
+```{r message=FALSE, warning=FALSE}
+
+# Evolucion temporal de la temperatura media mensual
+ggplot(data = meteo_bcn_df, aes(x = FECHA, y = TEMP_MEDIA_C)) +
+  geom_line(color="#990000", alpha=0.7) +
+  geom_hline(yintercept = mean(meteo_bcn_df$TEMP_MEDIA_C), 
+             linetype="dashed", color="#6b2e2e", size=0.5) +
+  labs(title = "Evolución temporal de la temperatura media mensual",
+       subtitle = "Barcelona. Periodo 1800-2023") +
+  xlab(NULL) + ylab("(ºC)") +
+  scale_y_continuous(breaks = seq(0,30,5)) +
+  theme(legend.position = "none", panel.background = element_blank(), panel.border = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(color = "#404040", hjust = 0.5),
+        axis.line.x = element_line(colour = "black", linewidth = 0.2, linetype = "solid"),
+        axis.line.y = element_line(colour = "black", linewidth = 0.2, linetype = "solid"))
+  
+
+# Evolucion temporal de la precipitacion acumulada mensual
+ggplot(meteo_bcn_df, aes(x = FECHA, y = PREC_MM)) +
+  geom_bar(stat = "identity", fill="#336699", alpha=0.7) +
+  geom_hline(yintercept = mean(meteo_bcn_df$PREC_MM), 
+             linetype="dashed", color = "#476685", size = 0.5) +
+  labs(title = "Evolución temporal de la precipitación acumulada mensual",
+       subtitle = "Barcelona. Periodo 1800-2023") +
+  xlab(NULL) + ylab("(mm)") +
+  scale_y_continuous(breaks = seq(0,400,50)) +
+  theme(legend.position = "none", panel.background = element_blank(), panel.border = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(color = "#404040", hjust = 0.5),
+        axis.line.x = element_line(colour = "black", linewidth = 0.2, linetype = "solid"),
+        axis.line.y = element_line(colour = "black", linewidth = 0.2, linetype = "solid"))
+
+```
+
+### 3.2 Representación gráfica de las series temporales en periodos quinquenales
+Con el objetivo de facilitar la observación de las series temporales se decide considerar reducir la precisión y tomar medidas anuales en lugar de mensuales. Para simplificar aun más la visualización se considerarán periodos de cinco años, así pues en las gráficas se representan la temperatura media anual y la precipitación media anual por cada uno de estos periodos quinquenales. Conviene remarcar que el último periodo representado, de 2020 a 2023, es de cuatro años en vez de cinco, sin embargo las medias anuales no se ven afectadas ya que la función *mean()* hace la media en función del número de observaciones que toma.
+
+Con esta representación se puede ver con más claridad la tendencia al alza de las temperaturas medias anuales, tendencia que se observa que se acentua en los últimos años, así como que desde el quinquenio 1920-1924 todas las temperaturas medias anuales excepto una son superiores a la media del periodo desde 1800. En cuanto a la precipitación media anual se observa un periodo comprendido entre los quinquenios 1805-1809 y 1835-1839 en el que la precipitación media anual es inferior a la media del periodo total. Se observa que la precipitación media anual del último periodo de la gráfica, entre 2020 y 2023, es de los más bajos de la serie completa. En este caso, convendría esperar a completar la información con los datos del año 2024 para poder hacer una comparativa rigurosa con el resto de quinquenios, aunque todo apunta a que será uno de los quinquenios de menos precipitación media anual desde 1800.
+
+```{r message=FALSE, warning=FALSE}
+
+# Calculo de la temperatura media anual por un periodo determinado (en años)
+
+# PASO 1. Crear dataframe con temperatura media anual y precipitacion total anual
+meteo_bcn_annual_df <- meteo_bcn_df %>% group_by(ANYO) %>% 
+  summarise(TEMP_MEDIA_C = mean(TEMP_MEDIA_C), PREC_MM = sum(PREC_MM))
+
+# Defino el periodo para facilitar posibles cambios de periodo (p.ej de 5 a 10 años)
+pertemp = 5
+
+meteo_bcn_annual_df$PERIODO <- as.integer(meteo_bcn_annual_df$ANYO/pertemp)*pertemp
+
+# PASO 2. Calcular las medias anuales en el periodo establecido (pertemp)
+meteo_bcn_annual_df <- meteo_bcn_annual_df %>% group_by(PERIODO) %>% 
+  summarise(TEMP_MEDIA_C = mean(TEMP_MEDIA_C), PREC_MM = mean(PREC_MM))
+
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+
+# Representacion grafica de la evolucion de la temperatura media anual por periodos
+ggplot(data = meteo_bcn_annual_df, aes(x = PERIODO, y = TEMP_MEDIA_C)) +
+  geom_line(color="#990000", alpha=0.7) +
+  geom_hline(yintercept = mean(meteo_bcn_annual_df$TEMP_MEDIA_C),
+             linetype="dashed", color = "#6b2e2e", size = 0.5) +
+  labs(title = "Evolución temporal de la temperatura media anual, por quinquenios",
+       subtitle = "Barcelona. Periodo 1800-2023") +
+  xlab(NULL) + ylab("(ºC)") +
+  scale_y_continuous(breaks = seq(0,20,1)) +
+  theme(legend.position = "none", panel.background = element_blank(), panel.border = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(color = "#404040", hjust = 0.5),
+        axis.line.x = element_line(colour = "black", linewidth = 0.2, linetype = "solid"),
+        axis.line.y = element_line(colour = "black", linewidth = 0.2, linetype = "solid"))
+
+# Representacion grafica de la evolucion de la precipitacion media anual por periodos
+ggplot(meteo_bcn_annual_df, aes(x = PERIODO, y = PREC_MM)) +
+  geom_bar(stat = "identity", fill="#336699", alpha=0.7) +
+  #geom_line(color="#336699", alpha=0.7) +
+  geom_hline(yintercept = mean(meteo_bcn_annual_df$PREC_MM), 
+             linetype="dashed", color = "#476685", size = 0.5) +
+  labs(title = "Evolución temporal de la precipitación media anual, por quinquenios",
+       subtitle = "Barcelona. Periodo 1800-2023") +
+  xlab(NULL) + ylab("(mm)") +
+  #scale_y_continuous(breaks = seq(300,700,50), limits = c(300,700), oob=scales::squish()) +
+  scale_y_continuous(breaks = seq(0,700,50)) +
+  theme(legend.position = "none", panel.background = element_blank(), panel.border = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(color = "#404040", hjust = 0.5),
+        axis.line.x = element_line(colour = "black", linewidth = 0.2, linetype = "solid"),
+        axis.line.y = element_line(colour = "black", linewidth = 0.2, linetype = "solid"))
+
+```
+
+### 3.3 Descomposición de la serie temporal en el periodo 2014-2023
+
+Para la descomposición de la serie temporal se van a considerar solamente los últimos diez años, de manera que se pueda observar fácilmente la periodicidad anual, especialmente de las temperaturas medias. Así pues en este apartado se van a considerar las observaciones mensuales de temperatura media y precipitación acumulada. En las siguientes gráficas se representa la evolución temporal de ambas series en el periodo entre los años 2014 y 2023.
+
+```{r message=FALSE, warning=FALSE}
+
+meteo_bcn_10a_df <- meteo_bcn_df[(meteo_bcn_df$ANYO >= 2014),]
+
+# Evolucion de la temperatura media mensual desde 2014
+ggplot(data = meteo_bcn_10a_df, aes(x = FECHA, y = TEMP_MEDIA_C)) +
+  geom_line(color="#990000", alpha=0.7) +
+  geom_hline(yintercept = mean(meteo_bcn_10a_df$TEMP_MEDIA_C),
+             linetype="dashed", color = "#6b2e2e", size = 0.5) +
+  labs(title = "Evolución temporal de la temperatura media mensual",
+       subtitle = "Barcelona. Periodo 2014-2023") +
+  xlab(NULL) + ylab("(ºC)") +
+  scale_y_continuous(breaks = seq(0,30,5)) +
+  theme(legend.position = "none", panel.background = element_blank(), panel.border = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(color = "#404040", hjust = 0.5),
+        axis.line.x = element_line(colour = "black", linewidth = 0.2, linetype = "solid"),
+        axis.line.y = element_line(colour = "black", linewidth = 0.2, linetype = "solid"))
+
+# Evolucion de la precipitacion acumulada mensual desde 2014
+ggplot(meteo_bcn_10a_df, aes(x = FECHA, y = PREC_MM)) +
+  geom_bar(stat = "identity", fill="#336699", alpha=0.7) +
+  geom_hline(yintercept = mean(meteo_bcn_10a_df$PREC_MM), 
+             linetype="dashed", color = "#476685", size = 0.5) +
+  labs(title = "Evolución temporal de la precipitación acumulada mensual",
+       subtitle = "Barcelona. Periodo 2014-2023") +
+  xlab(NULL) + ylab("(mm)") +
+  scale_y_continuous(breaks = seq(0,700,50)) +
+  theme(legend.position = "none", panel.background = element_blank(), panel.border = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(color = "#404040", hjust = 0.5),
+        axis.line.x = element_line(colour = "black", linewidth = 0.2, linetype = "solid"),
+        axis.line.y = element_line(colour = "black", linewidth = 0.2, linetype = "solid"))
+
+```
+
+A continuación se hace la descomposición de las series temporales. En primer lugar se crean los objetos *time series* necesarios, uno con las temperaturas medias y otro con la precipitación acumulada cada mes.
+
+Se aplica la función *decompose()* sobre los objetos *time series* creados para obtener las componentes de las series temporales. Dado que intervalo de las observaciones es mensual y los ciclos son de un año, el parámetro *frequency* ha de ser igual a 12. Finalmente se ejecuta la función *autoplot()* para representar gráficamente las componentes extraídas.
+
+```{r message=FALSE, warning=FALSE}
+
+# Creacion de los objetos time series
+temp_ts <- ts(meteo_bcn_10a_df$TEMP_MEDIA_C, start = 2014, frequency = 12)
+rain_ts <- ts(meteo_bcn_10a_df$PREC_MM, start = 2014, frequency = 12)
+
+# Descomposicion y representacion grafica de las series temporales
+temp_comp_ts <- decompose(temp_ts)
+autoplot(temp_comp_ts,colour = "#990000")
+
+rain_comp_ts <- decompose(rain_ts)
+autoplot(rain_comp_ts,colour = "#336699")
+
+```
+
+La descomposición de la serie temporal de temperatura media mensual de los últimos 10 años (2014-2023) muestra el comportamiento periódico de esta magnitud meteorológica, con los mínimos en los meses de invierno y los máximos en verano. La línea de tendencia se muestra estable los primeros años, aunque se observa una tendencia ascendente a partir del año 2022. En cuanto a la componente irregular (*remainder* en el gráfico) se mantiene dentro del rango entre -3ºC y 2ºC, por lo que se considera que no afecta excesivamente al resto de componentes de la serie temporal.
+
+La descomposición de la serie temporal de precipitación acumulada mensual de los últimos 10 años (2014-2023) revela dos períodos de mayor ocurrencia de lluvia, uno en primavera y otro en otoño. La línea de tendencia muestra un período de mayor precipitación entre los años 2018 y 2020, y un periodo desde el año 2021 hasta el final de la serie en que la tendencia es de menor precipitación, que pone de manifiesto el estado de excepcionalidad hidríca en la ciudad de Barcelona a final del año 2023. Se observa que la componente que más influye en la serie temporal es la irregular, lo que da una idea del carácter irregular de las precipitaciones típico del clima mediterráneo.
+
+# 4. Conclusión  
+
+En este proyecto se ha hecho una introducción al análisis de series temporales mediante la observación de la evolución de las temperaturas medias y la precipitación acumulada en la ciudad de Barcelona, en intervalos mensuales, con las observaciones registradas desde el año 1800.  
+
+La representación gráfica de los datos originales ha permitido corroborar la importancia de usar una escala temporal adecuada para observar tendencias. El paso de la escala mensual a una escala anual, y la agrupación de los datos en periodos de cinco años, ha permitido visualizar a simple vista tendencias climatológicas en la ciudad de Barcelona.  
+
+La descomposición de la serie temporal de la temperatura de los últimos diez años pone de manifiesto la periodicidad anual de esta magnitud, así como la tendencia a la alza de los últimos dos años. En cuanto a la descomposición de la serie temporal de la precipitación da una idea del régimen irregular de las lluvias del clima mediterráneo, y de la mayor ocurrencia de estas lluvias en primavera y otoño.  
+
+En cuanto a las cuestiones planteadas al inicio del análisis se ha corroborado el aumento claro de la temperatura media anual en los últimos años, y se ha confirmado que la precipitación anual media también es inferior a la media global del periodo desde el año 1800. Sin embargo se ha visto que estos periodos de lluvias escasas no son excepcionales, ya que se ha observado un periodo de siete quinquenios, entre 1805 y 1839, en los que la precipitación media anual es inferior a la media global.  
+
+**Siguientes pasos**  
+Los siguientes pasos en el análisis de las series temporales serían el modelado y la predicción de tendencias futuras a partir de los modelos obtenidos. Dentro de los modelos de las series se considerarían principalmente los autoregresivos, ARIMA y Holt-Winters.
