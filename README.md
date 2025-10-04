@@ -31,14 +31,7 @@ En este proyecto se ha puesto de manifiesto la importancia de usar una escala te
 
 ## Descripción de los ficheros R
 
-**habitants.R**
-Variació del nombre d’habitants als períodes 1975-2020 i 2020-2022. Escriptura dels resultats a dos fitxers csv amb la informació processada.
+Se incluye el fichero RMD que se usa para generar el informe en HTML. Los conjuntos de datos originales, en formato txt, están publicados en la web del Servei Meteorològic de Catalunya.
 
-**dftoviz.R**
-Script per a l’adequació dels dataframes processats per a exportar-los a l’eina flourish i mostrar la informació desitjada. [quins csv s’han generat en aquest cas...]
-
-**economics.R**
-Script per a la creació d’un fitxer CSV amb la informació del nombre de persones ocupades a cada municipi en funció dels sectors econòmics a data 31 de desembre de 2019
-
-**edats.R**
-Script per a la creació d’un fitxer CSV amb la variació d'habitants per grups d’edat a cada municipi al període 2000-2020
+**Main.Rmd**
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
