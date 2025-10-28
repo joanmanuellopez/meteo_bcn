@@ -31,7 +31,11 @@ En este proyecto se ha puesto de manifiesto la importancia de usar una escala te
 
 ## Descripción de los ficheros R
 
-Se incluye el fichero RMD que se usa para generar el informe en HTML. Los conjuntos de datos originales, en formato txt, están publicados en la web del Servei Meteorològic de Catalunya.
+Se incluye el fichero RMD que se usa para generar el informe en HTML.
 
 **Main.Rmd**
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+El fichero se estructura en las siguientes secciones:  
+* Introducción.
+* Obtención y adecuación de los datos. Análisis exploratorio.
+* Análisis de las series temporales en el periodo 1800-2023
+* Conclusiones.
